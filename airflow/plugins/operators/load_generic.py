@@ -1,0 +1,47 @@
+from airflow.hooks.postgres_hook import PostgresHook
+from airflow.models import BaseOperator
+from airflow.utils.decorators import apply_defaults
+
+from helpers import SqlQueries
+
+
+class GenericTableLoadOperator(BaseOperator):
+
+    ui_color = '#F98866'
+    
+    @apply_defaults
+    def __init__(self,
+                 redshift_conn_id = "",
+                 table = "",
+                 query_name = "",        
+                 do_append = False,
+                 *args, **kwargs):
+                    
+        super(GenericTableLoadOperator, self).__init__(*args, **kwargs)
+        
+        self.redshift_conn_id = redshift_conn_id
+        self.table = table
+        self.query_name = query_name
+        self.do_append = do_append
+        
+        return
+
+    def execute(self, context):
+        redshift = PostgresHook(postgres_conn_id=self.redshift_conn_id)
+
+        if not self.do_append:
+            redshift.run("DELETE FROM {}".format(self.table))         
+            self.log.info("Truncated values from {} table".format(self.table))
+
+        try:
+            query = getattr(SqlQueries, self.query_name).format(self.table)
+            query = "INSERT INTO {}  ({})".format(self.table, query)
+            self.log.info("Formatted SQL: {}".format(query))
+        except Exception as ex:
+            self.log.error("Error rendering query. Resolved query_name {}".format(self.query_name))
+        
+        self.log.info("Inserting data from staging tables into {} table".format(self.table))
+        redshift.run(query)
+        self.log.info("Inserted data from staging tables into {} table".format(self.table))
+        
+        return
