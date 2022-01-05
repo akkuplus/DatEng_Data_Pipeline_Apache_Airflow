@@ -3,15 +3,15 @@
 
 ## Summary
 
-This demo project conducts ETL operations on JSON files from AWS S3 and load data into AWS REdshift. 
+This demo project conducts ELT operations on JSON files from AWS S3 and loads data into AWS Redshift. 
 Apache Airflow schedules and runs the corresponding data pipeline.   
 
-The first step is to load data from AWS S3 into AWS Redshift. 
-The second step processes the data resources and writes results into five tables that model is star schema.
+The first step loads data from AWS S3 into AWS Redshift as staging tables. 
+The second step processes the data in the staging tables and builds five tables star schema.
 
 
 ## Data
-The data sets consists of two datasets of files, that are provided in AWS S3 data lakes:
+The data consists of two sets of files, that are provided in AWS S3 data lakes:
 
 - Song dataset (available at `s3://udacity-dend/song_data`) contains JSON files, like  
 
@@ -53,19 +53,18 @@ The data sets consists of two datasets of files, that are provided in AWS S3 dat
 
 ## Data Models
 
-The schema consists of the following tables: "songplays" as the fact table and "artists", "songs", 
-"time", and "users" as dimensional tables.  
+The schema consists of the following tables: "songplays" as the fact table and "artists", "songs", "time", and "users" as dimensional tables.  
 The following diagram shows the tables and corresponding attributes.
 
 ![Entity relation diagram](ERD_sql_schema.drawio.png)
 
-To build the star schema, the data from both sources is loaded into staging tables.
 
 ## Prerequisites
 
 The project runs having Python 3.6 and Apache Airflow. As a recommendation, use a Linux instance and install Airflow
- using pip. At least, we need Postgres and Amazon Web Services as Airflow providers.
-For install instruction see https://airflow.apache.org/docs/apache-airflow/stable/installation/installing-from-pypi.html
+ using pip. At least, we need Postgres and Amazon Web Services as Airflow providers (for install instructions
+see https://airflow.apache.org/docs/apache-airflow/stable/installation/installing-from-pypi.html)
+
 We can run Airflow locally (see https://airflow.apache.org/docs/apache-airflow/stable/start/local.html).  
 
 Both datasets are hosted at `s3://udacity-dend/song_data` and at `s3://udacity-dend/log_data`.
@@ -77,25 +76,25 @@ A running Python environment having Airflow is assumed.
 
 ### Setup Redshift cluster
 
-Create cluster and set login "awsuser" and "password" <your password>. As soon as the cluster runs,
-set publicly accessibility. Select "Amazon Redshift" -> "Clusters" -> "<name of your cluster>" 
-->  "Actions" -> "Modify publicly accessible setting" -> "Enable"
+Create a cluster and set login "awsuser" and "password" <your password>. As soon as the cluster runs,
+set publicly accessibility (select "Amazon Redshift" -> "Clusters" -> "<name of your cluster>" 
+->  "Actions" -> "Modify publicly accessible setting" -> "Enable").
 
 ### Start Airflow
 
-The sub folder "airflow" holds all project related code. 
+The subfolder "airflow" holds all project-related code. 
 
-After installing, the 'Standalone' command will initialise the database, make a user, and start all components for you.  
-```$ airflow standalone```  
+After installing, the 'Standalone' command will initialize the database, make a user, and start all components for you.  
+```$ airflow standalone```. 
 Alternatively, Udacity provides a start script 
-$ /opt/airflow/start.sh```
+$ /opt/airflow/start.sh```.
 
-If console shows a running webserver, open Airflow UI. Visit localhost:8080 in the browser and use the admin account 
-details shown on the terminal to login.
+If terminal  shows a running webserver, open Airflow UI. Visit localhost:3000 or localhost:8080 in the browser 
+and use the admin account details shown on the terminal to login.
 
 ### Set connections within Airflow
-To access AWS S3 and to process data in AWS Redshift, set the following connection within Airflow UI  
-```"Admin" -> "Connections" -> "Create"```
+To access AWS S3 and to process data in AWS Redshift, set the following connections within Airflow UI
+(```"Admin" -> "Connections" -> "Create"```):
 
 1. Connection setting **Redshift**:
 ```
@@ -121,40 +120,48 @@ To access AWS S3 and to process data in AWS Redshift, set the following connecti
     Extra       <empty>
 ```
 
+### DAGs
+
+The data pipeline utilizes two DAGs.
+
+![DAG_Overview.png](DAG_Overview.png)
+
+The first DAG **create_tables_dag* creates all required tables and needs to run
+once at first.
+
+The second DAG **ELT_dag**  executes the following operators depending on a schedule:
+
+The *StageToRedshiftOperator* loads JSON data from AWS S3 into a corresponding staging table in AWS Redshift.
+The *LoadFactOperator* and the *LoadDimensionOperator* load data from staging tables into the tables of the star schema.
+The *DataQualityOperator* checks tables of the data model and raises an error if the total count of rows of one
+table undershoots the parameter *min_number_of_rows*. 
+
+![DAG_dependencies.png](DAG_dependencies.png)
+
 
 ### Execute DAGs
 The Airflow UI shows two DAGs.
 
-The DAG create_tables_dag creates all required tables. 
-This DAG should only run once to (re-)set the database scheme. 
+The DAG **Create_tables_dag** creates all required tables. 
+This DAG should only run once to (re-)set the database schemes. 
 Run DAG **Create_tables_dag** by clicking *On*. After completion, you may turn the DAG *Off*.
  
-The ELT_dag compromises several dependent tasks. First tasks import JSON data from S3 into corresponding tables 
-*staging_events* and *staging_songs* in Redshift. 
-Afterwards, the DAG runs tasks to load data from staging tables into tables of star schema.
-Lastly, the task Data Quality Check queries the five tables and counts the number of rows. Having   
+The ELT_dag compromises several dependent tasks. The first tasks import JSON files from AWS S3
+into the corresponding tables *staging_events* and *staging_songs* in Redshift. 
+Afterward, the DAG runs tasks to load data from staging tables into tables of the star schema.
+Lastly, the task Data Quality Check queries these tables and counts the number of rows.
 
-The ELT_DAG is set to run from 2019-01-12 00:00 to 2019-01-13 00:00 hourly, for the reason on demonstration.  
-To start the DAG, just click "ELT_Dag". The Airflow UI represents the running ELT_dag.  
+The ELT_dag runs hourly from 2022-01-01 00:00 to 2022-01-02 00:00, for the reason on demonstration.  
+To start the DAG, just click "ELT_dag". The Airflow UI represents this DAG during execution:  
 
 ![ELT_dag_in_Airflow.png](ELT_dag_in_Airflow.png)
 
-### DAGs
+<!--
+## Reminder where to Add an new operator class:
 
-The data pipelines use two DAGs. The first DAG **create_tables_dag** creates all required tables and needs to run once.
-
-The second DAG **ELT_dag**  executes the following operators depending on a schedule:
-
-The *StageToRedshiftOperator* loads json data from AWS S3 into a corresponding staging table in AWS Redshift.
-The *GenericTableLoadOperator* executes insert queries to load data from staging tables into a 
-specific tables of the data model.
-The *DataQualityOperator* checks tables of the data model and raises an error, if the total count of rows of a 
-tables undershot the parameter *min_number_of_rows*. 
-
-# Hints
-Imports:
-./plugins/__init__.py -> within "operators" or "helpers"
-./plugins/operators/__init__.py -> within :
+Extend Imports:
+- ./plugins/__init__.py -> within "operators" or "helpers"
+- ./plugins/operators/__init__.py -> within :
 	1) from operators.<python file name> import <Operatorname>
     2) __all__ = [ <Class name of operator>, ]
-
+-->
