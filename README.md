@@ -6,8 +6,8 @@
 This demo project conducts ELT operations on JSON files from AWS S3 and loads data into AWS Redshift. 
 Apache Airflow schedules and runs the corresponding data pipeline.   
 
-The first step loads data from AWS S3 into AWS Redshift as staging tables. 
-The second step processes the data in the staging tables and builds five tables star schema.
+The first step loads data from AWS S3 into staging tables within AWS Redshift. 
+The second step processes the data in the staging tables and builds a five tables star schema.
 
 
 ## Data
@@ -56,7 +56,7 @@ The data consists of two sets of files, that are provided in AWS S3 data lakes:
 The schema consists of the following tables: "songplays" as the fact table and "artists", "songs", "time", and "users" as dimensional tables.  
 The following diagram shows the tables and corresponding attributes.
 
-![Entity relation diagram](ERD_sql_schema.drawio.png)
+![Entity relation diagram](doc/ERD_sql_schema.drawio.png)
 
 
 ## Prerequisites
@@ -67,7 +67,7 @@ see https://airflow.apache.org/docs/apache-airflow/stable/installation/installin
 
 We can run Airflow locally (see https://airflow.apache.org/docs/apache-airflow/stable/start/local.html).  
 
-Both datasets are hosted at `s3://udacity-dend/song_data` and at `s3://udacity-dend/log_data`.
+Both datasets are hosted at `s3://udacity-dend/song_data` and `s3://udacity-dend/log_data`.
 
 
 ## Getting Started
@@ -76,7 +76,7 @@ A running Python environment having Airflow is assumed.
 
 ### Setup Redshift cluster
 
-Create a cluster and set login "awsuser" and "password" <your password>. As soon as the cluster runs,
+Create a cluster and set login "awsuser" and "your password". As soon as the cluster runs,
 set publicly accessibility (select "Amazon Redshift" -> "Clusters" -> "<name of your cluster>" 
 ->  "Actions" -> "Modify publicly accessible setting" -> "Enable").
 
@@ -84,10 +84,10 @@ set publicly accessibility (select "Amazon Redshift" -> "Clusters" -> "<name of 
 
 The subfolder "airflow" holds all project-related code. 
 
-After installing, the 'Standalone' command will initialize the database, make a user, and start all components for you.  
-```$ airflow standalone```. 
-Alternatively, Udacity provides a start script 
-$ /opt/airflow/start.sh```.
+After installing Airflow, the 'Standalone' command will initialize the database, make a user, 
+and start all components for you.   
+```$ airflow standalone```.   
+Alternatively, Udacity provides the start script `$ /opt/airflow/start.sh`.
 
 If terminal  shows a running webserver, open Airflow UI. Visit localhost:3000 or localhost:8080 in the browser 
 and use the admin account details shown on the terminal to login.
@@ -100,7 +100,7 @@ To access AWS S3 and to process data in AWS Redshift, set the following connecti
 ```
    Conn Id      redshift
    Conn Type    Postgres
-   Host         <Host address of Redshift cluster. Do not include a database name or port!>
+   Host         <Host address of Redshift cluster. Do not include a database schema or port!>
    Schema       dev
    Login        awsuser
    Password  	<your password>
@@ -124,19 +124,28 @@ To access AWS S3 and to process data in AWS Redshift, set the following connecti
 
 The data pipeline utilizes two DAGs.
 
-![DAG_Overview.png](DAG_Overview.png)
+![Overview DAG](doc/DAG_Overview.png)
 
-The first DAG **create_tables_dag* creates all required tables and needs to run
+The first DAG **create_tables_dag** creates all required tables and needs to run
 once at first.
 
 The second DAG **ELT_dag**  executes the following operators depending on a schedule:
 
-The *StageToRedshiftOperator* loads JSON data from AWS S3 into a corresponding staging table in AWS Redshift.
+The *StageToRedshiftOperator* loads JSON data from AWS S3 into corresponding staging tables in AWS Redshift.
 The *LoadFactOperator* and the *LoadDimensionOperator* load data from staging tables into the tables of the star schema.
-The *DataQualityOperator* checks tables of the data model and raises an error if the total count of rows of one
-table undershoots the parameter *min_number_of_rows*. 
+(The GenericTableLoadOperator can execute arbitrary insert queries to load data from staging tables.) 
+The *DataQualityOperator* checks tables of the data model and raises an error, e.g. if the total count of rows of 
+a table undershoots a parameter.
 
-![DAG_dependencies.png](DAG_dependencies.png)
+
+![Dependencies in DAG](doc/DAG_dependencies.png)
+
+Two implemented data quality checks are:  
+1. A check counts rows and raises error, if a table is empty  
+   ```quality_check_gt_zero_rows = {'check_sql': "SELECT COUNT (*) FROM {}", "comparison": "gt", "test_value": 0}```  
+2. The count of userid that equals 'null' should return zero  
+   ```quality_check_eq_zero_userid = {'check_sql': "SELECT COUNT (*) FROM {} WHERE userid is null", "comparison":"eq",    "test_value": 0}```
+
 
 
 ### Execute DAGs
@@ -144,17 +153,19 @@ The Airflow UI shows two DAGs.
 
 The DAG **Create_tables_dag** creates all required tables. 
 This DAG should only run once to (re-)set the database schemes. 
-Run DAG **Create_tables_dag** by clicking *On*. After completion, you may turn the DAG *Off*.
+Run DAG **Create_tables_dag** by clicking *On*. After completion, you may turn the DAG *Off*. 
+Start the ETL_dag after completing the Create_tables_dag!
  
-The ELT_dag compromises several dependent tasks. The first tasks import JSON files from AWS S3
+The **ELT_dag** compromises several dependent tasks. The first tasks import JSON files from AWS S3
 into the corresponding tables *staging_events* and *staging_songs* in Redshift. 
 Afterward, the DAG runs tasks to load data from staging tables into tables of the star schema.
-Lastly, the task Data Quality Check queries these tables and counts the number of rows.
+Lastly, the task Data Quality Check queries these tables and checks data quality.
 
 The ELT_dag runs hourly from 2022-01-01 00:00 to 2022-01-02 00:00, for the reason on demonstration.  
 To start the DAG, just click "ELT_dag". The Airflow UI represents this DAG during execution:  
 
-![ELT_dag_in_Airflow.png](ELT_dag_in_Airflow.png)
+![ELT_dag_in_Airflow.png](doc/ELT_dag_in_Airflow.png)
+
 
 <!--
 ## Reminder where to Add an new operator class:
