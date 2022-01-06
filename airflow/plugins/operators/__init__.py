@@ -4,6 +4,7 @@ from operators.load_generic import GenericTableLoadOperator
 from operators.load_fact import LoadFactOperator
 from operators.load_dimension import LoadDimensionOperator
 from operators.data_quality import DataQualityOperator
+from operators.data_quality_tester import DataQualityTestOperator
 
 __all__ = [
     'CreateTablesInRedshiftOperator'
@@ -11,5 +12,6 @@ __all__ = [
     'GenericTableLoadOperator',
     'LoadFactOperator',
     'LoadDimensionOperator',
-    'DataQualityOperator'
+    'DataQualityOperator',
+    'DataQualityTestOperator'
 ]
