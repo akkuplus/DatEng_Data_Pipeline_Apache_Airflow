@@ -33,9 +33,8 @@ class StageToRedshiftOperator(BaseOperator):
                  table_name="",
                  s3_bucket="",
                  json_path="auto",
-                 use_partitioning=False,
                  execution_date="",
-                 truncate_table=False,
+                 do_append = False,
                  *args, **kwargs):
 
         super(StageToRedshiftOperator, self).__init__(*args, **kwargs)
@@ -45,20 +44,12 @@ class StageToRedshiftOperator(BaseOperator):
         self.s3_bucket = s3_bucket
         self.json_path = json_path
         self.execution_date = execution_date
-        self.use_partitioning = use_partitioning
-        self.truncate_table = truncate_table
+        self.do_append = do_append
         
         return
 
     def execute(self, context):
-        execution_date = parser.parse(self.execution_date)
-        self.log.info(f"Execution date: {execution_date}")
-        self.log.info(f"Execution year: {execution_date.year}")
-        self.log.info(f"Execution month: {execution_date.month}")
-        self.log.info(f"Use Partitioning: {self.use_partitioning}")
 
-        # If we are using partitioning, setup S3 path to use year and month of execution_date
-        # s3_path = self.s3_bucket+f'/{execution_date.year}/{execution_date.month}' if self.use_partitioning else self.s3_bucket
         s3_path = self.s3_bucket
         self.log.info(f"S3 path: {s3_path}")
         
@@ -67,8 +58,7 @@ class StageToRedshiftOperator(BaseOperator):
         redshift_hook = PostgresHook(self.redshift_conn_id)
 
         # Truncate table
-        if self.truncate_table:
-
+        if not self.do_append:
             self.log.info(f"Truncating table {self.table_name}")
             redshift_hook.run(self.TRUNCATE_SQL.format(self.table_name))    
         
@@ -84,8 +74,3 @@ class StageToRedshiftOperator(BaseOperator):
         self.log.info(f"Copied into table {self.table_name}")
         
         return
-
-
-
-
-
