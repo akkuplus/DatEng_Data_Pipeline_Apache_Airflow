@@ -37,7 +37,7 @@ class LoadFactOperator(BaseOperator):
             self.log.info("Truncated values from {} table".format(self.table))
 
         try:
-            query = getattr(SqlQueries, self.query_name).format(self.table)
+            query = getattr(SqlQueries, self.query_name).format(self.table) # Pay attention to the attribute self.query_name! It contains the query.
             query = "INSERT INTO {}  ({})".format(self.table, query)
             self.log.info("Formatted SQL: {}".format(query))
         except Exception as ex:
